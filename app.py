@@ -1,101 +1,60 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
+import streamlit as st
+import os
+from scraper import ProductHuntScraper
 import pandas as pd
-import time
-import re
 
-class ProductHuntScraper:
-    def __init__(self):
-        self.driver = None
-        self.data = []
-        
-    def setup_driver(self):
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service, options=options)
-        
-    def extract_streak_days(self, streak_text):
-        match = re.search(r'(\d+)\s*day streak', streak_text)
-        return int(match.group(1)) if match else 0
-        
-    def get_social_links(self, profile_url):
-        social_links = {
-            'twitter': '',
-            'linkedin': '',
-            'facebook': '',
-            'website': ''
-        }
-        
+# Force the port to 8506
+os.environ["STREAMLIT_SERVER_PORT"] = "8506"
+
+# Basic page setup
+st.title("Product Hunt Leaderboard Scraper")
+
+# URL input
+url = st.text_input(
+    'Enter Product Hunt Leaderboard URL',
+    value='https://www.producthunt.com/leaderboard',
+    help='Enter the URL of the Product Hunt leaderboard you want to scrape'
+)
+
+# User limit input with explanation
+user_limit = st.number_input(
+    'Number of profiles to scrape (0 for unlimited)',
+    min_value=0,
+    value=20,
+    help='Enter how many profiles you want to scrape. Set to 0 to scrape all profiles.'
+)
+
+# Scrape button
+if st.button("Start Scraping"):
+    if url:
         try:
-            self.driver.get(profile_url)
-            time.sleep(2)
+            scraper = ProductHuntScraper()
+            # Convert user_limit to None if it's 0
+            limit = None if user_limit == 0 else user_limit
             
-            links = self.driver.find_elements(By.TAG_NAME, 'a')
-            for link in links:
-                try:
-                    href = link.get_attribute('href')
-                    if href:
-                        if 'twitter.com' in href:
-                            social_links['twitter'] = href
-                        elif 'linkedin.com' in href:
-                            social_links['linkedin'] = href
-                        elif 'facebook.com' in href:
-                            social_links['facebook'] = href
-                        elif href.startswith('http') and not any(domain in href for domain in ['producthunt.com', 'twitter', 'linkedin', 'facebook']):
-                            social_links['website'] = href
-                except:
-                    continue
-        except Exception as e:
-            print(f'Error getting social links: {str(e)}')
+            st.write(f"Starting scraper with {'unlimited' if limit is None else limit} profiles...")
+            df = scraper.scrape_leaderboard(url, user_limit=limit)
             
-        return social_links
-        
-    def scrape_leaderboard(self, url="https://www.producthunt.com/visit-streaks"):
-        try:
-            self.setup_driver()
-            self.driver.get(url)
-            time.sleep(5)
-            
-            user_entries = self.driver.find_elements(By.CSS_SELECTOR, 'div[role="listitem"]')
-            
-            for entry in user_entries:
-                try:
-                    user_link = entry.find_element(By.TAG_NAME, 'a')
-                    name = user_link.text.strip()
-                    profile_url = user_link.get_attribute('href')
-                    
-                    streak_text = entry.text
-                    streak_days = self.extract_streak_days(streak_text)
-                    
-                    social_links = self.get_social_links(profile_url)
-                    
-                    self.data.append({
-                        'Name': name,
-                        'Streak Days': streak_days,
-                        'Profile URL': profile_url,
-                        'Twitter': social_links['twitter'],
-                        'LinkedIn': social_links['linkedin'],
-                        'Facebook': social_links['facebook'],
-                        'Website': social_links['website']
-                    })
-                    
-                except Exception as e:
-                    print(f'Error processing user: {str(e)}')
-                    continue
-                    
-        except Exception as e:
-            print(f'Error in scraping: {str(e)}')
-        finally:
-            if self.driver:
-                self.driver.quit()
+            if not df.empty:
+                st.write("Scraping completed!")
+                st.dataframe(df)
                 
-        return pd.DataFrame(self.data)
+                # Download button for CSV
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="Download data as CSV",
+                    data=csv,
+                    file_name="producthunt_data.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.error("No data was scraped. Please try again.")
+                
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+    else:
+        st.error("Please enter a valid URL")
+
+if st.button("Test Scraper"):
+    scraper = ProductHuntScraper()
+    st.write("Scraper initialized successfully!")
