@@ -18,13 +18,21 @@ class ProductHuntScraper:
     def setup_driver(self):
         try:
             options = Options()
-            options.add_argument('--start-maximized')
+            options.add_argument('--headless')  # Required for cloud deployment
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')  # Required for headless
             
-            # Use default Chrome installation
-            service = Service()
-            self.driver = webdriver.Chrome(options=options)
+            # Cloud-specific settings
+            if st.runtime.exists():
+                # Running on Streamlit Cloud
+                options.binary_location = "/usr/bin/google-chrome"
+                service = Service()
+            else:
+                # Running locally
+                service = Service()
+            
+            self.driver = webdriver.Chrome(options=options, service=service)
             
         except Exception as e:
             st.error(f"Error setting up driver: {str(e)}")
