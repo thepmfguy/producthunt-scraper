@@ -7,7 +7,7 @@ st.title('Product Hunt Leaderboard Scraper')
 # URL input
 url = st.text_input(
     'Enter Product Hunt Leaderboard URL',
-    value='https://www.producthunt.com/leaderboard',
+    value='https://www.producthunt.com/visit-streaks',
     help='Enter the URL of the Product Hunt leaderboard you want to scrape'
 )
 
